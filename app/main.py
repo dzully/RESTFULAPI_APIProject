@@ -29,6 +29,7 @@ supabase: Client = create_client(url, key)
 
 origins = [
     "http://localhost:5174",
+    "https://crud-react-project-weld.vercel.app"
 ]
 
 app.add_middleware(
