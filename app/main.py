@@ -1,7 +1,8 @@
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt import decode
+from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -57,7 +58,6 @@ async def startup():
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         user = supabase.auth.get_user(credentials.credentials)
-        print(user)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,6 +74,49 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 @app.get("/api/v1/get-all-post")
 async def read_blogs(user: dict = Depends(get_current_user)):
     async with SessionLocal() as session:
-        result = await session.execute(select(Blog))
+        result = await session.execute(select(Blog).order_by(Blog.id))
+        blogs = result.scalars().all()
+        return blogs
+
+
+class PostUpdate(BaseModel):
+    title: str
+    content: str
+
+
+@app.put("/api/v1/update-post/{id}")
+async def update_item(id: str, post_update: PostUpdate, user: dict = Depends(get_current_user)):
+    async with SessionLocal() as session:
+        db_item = await session.get(Blog, int(id))
+        db_item.title = post_update.title
+        db_item.content = post_update.content
+        await session.commit()
+
+        result = await session.execute(select(Blog).order_by(Blog.id))
+        blogs = result.scalars().all()
+        return blogs
+
+
+@app.post("/api/v1/create-post")
+async def create_item(post: PostUpdate, user: dict = Depends(get_current_user)):
+    async with SessionLocal() as session:
+        new_post = Blog(title=post.title, content=post.content)
+        session.add(new_post)
+        await session.commit()
+
+        result = await session.execute(select(Blog).order_by(Blog.id))
+        blogs = result.scalars().all()
+        return blogs
+
+
+@app.delete("/api/v1/delete-post/{id}")
+async def delete_item(id: str, user: dict = Depends(get_current_user)):
+    async with SessionLocal() as session:
+        db_item = await session.get(Blog, int(id))
+        print(db_item)
+        await session.delete(db_item)
+        await session.commit()
+
+        result = await session.execute(select(Blog).order_by(Blog.id))
         blogs = result.scalars().all()
         return blogs
